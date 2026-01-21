@@ -10687,4 +10687,3 @@ window.chooseWinner = typeof chooseWinner !== 'undefined' ? chooseWinner : null;
 window.closeResetModal = typeof closeResetModal !== 'undefined' ? closeResetModal : null;
 window.closeResetRankingModal = typeof closeResetRankingModal !== 'undefined' ? closeResetRankingModal : null;
 // window.ModalManager = ModalManager; // Removed: ModalManager class doesn't exist
-window.imageCache = imageCache;
