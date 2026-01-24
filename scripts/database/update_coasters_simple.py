@@ -83,7 +83,8 @@ def update_database(
     print()
     
     # Setup paths
-    database_dir = Path(__file__).parent.parent.parent.parent / "database" / "data"
+    # Script is at scripts/database/, go up 2 levels to project root
+    database_dir = Path(__file__).parent.parent.parent / "database" / "data"
     database_path = database_dir / "coasters_master.json"
     mapping_path = database_dir / "rcdb_to_custom_mapping.json"
     
@@ -100,7 +101,7 @@ def update_database(
     total_coasters = 0
     scraped_batch = []
     consecutive_not_found = 0
-    max_consecutive_not_found = 50  # Stop after 50 consecutive not founds
+    max_consecutive_not_found = 150  # Stop after 150 consecutive not founds
     
     # Process range
     total_ids = end_id - start_id + 1
@@ -156,6 +157,13 @@ def update_database(
         consecutive_not_found = 0  # Reset counter on successful scrape
         scraped_count += 1
         progress.mark_completed(rcdb_id)
+        
+        # Take a break every 100 attempts
+        if i % 100 == 0:
+            print()
+            print(f"--- Taking 10 second break after {i} attempts ---")
+            time.sleep(10)
+            print()
         
         # Save periodically
         if len(scraped_batch) >= save_interval:

@@ -278,27 +278,43 @@ class RCDBScraper:
         return match.group(1) if match else ""
     
     def _extract_manufacturer(self, soup: BeautifulSoup) -> str:
-        text = soup.get_text()
-        if 'Make:' in text:
-            for elem in soup.find_all(string=lambda x: x and 'Make:' in x):
-                parent = elem.parent
-                if parent:
-                    for a in parent.find_all_next('a', limit=5):
-                        href = a.get('href', '')
-                        if href and href[0] == '/' and href.endswith('.htm'):
-                            return a.get_text(strip=True)
+        """Extract manufacturer from Make: field - RCDB uses <p>Make: <a>...</a></p> structure"""
+        # Find <p> element containing "Make:" text
+        for p in soup.find_all('p'):
+            p_text = p.get_text()
+            if 'Make:' in p_text:
+                # Find the first <a> link after "Make:" in this <p>
+                # Split by Make: to ensure we get the link after it, not before
+                text_parts = p_text.split('Make:')
+                if len(text_parts) > 1:
+                    # Find first <a> tag in this paragraph
+                    link = p.find('a')
+                    if link:
+                        return link.get_text(strip=True)
         return ""
     
     def _extract_model(self, soup: BeautifulSoup) -> str:
-        text = soup.get_text()
-        if 'Model:' in text:
-            for elem in soup.find_all(string=lambda x: x and 'Model:' in x):
-                parent = elem.parent
-                if parent:
-                    for a in parent.find_all_next('a', limit=5):
-                        href = a.get('href', '')
-                        if href and href.endswith('.htm'):
-                            return a.get_text(strip=True)
+        """Extract model from Model: field - RCDB uses <p>Make: ...<br>Model: <a>...</a></p>"""
+        # Find <p> element containing "Model:" text
+        for p in soup.find_all('p'):
+            p_html = str(p)
+            if 'Model:' in p_html:
+                # Split by <br> or <br/> to separate Make and Model lines
+                # Use the part after "Model:"
+                if 'Model:' in p_html:
+                    # Extract everything after "Model:" text
+                    model_part = p_html.split('Model:')[1]
+                    # Find all <a> links in the model part only
+                    from bs4 import BeautifulSoup as BS
+                    model_soup = BS(model_part, 'html.parser')
+                    links = model_soup.find_all('a')
+                    
+                    if links:
+                        # Take the LAST link (skips "All Models", gets actual model)
+                        last_link_text = links[-1].get_text(strip=True)
+                        # Only return if it's not "All Models"
+                        if last_link_text != 'All Models':
+                            return last_link_text
         return ""
     
     def _extract_type(self, soup: BeautifulSoup) -> str:
@@ -310,10 +326,17 @@ class RCDBScraper:
         return ""
     
     def _extract_design(self, soup: BeautifulSoup) -> str:
+        """Extract design type - expanded to include all common RCDB designs"""
+        valid_designs = [
+            'Sit Down', 'Inverted', 'Flying', 'Stand Up', 'Wing',
+            'Bobsled', 'Pipeline', '4th Dimension', 'Suspended',
+            'Side Friction', 'Virginia Reel', 'Floorless', 'Dive',
+            'Wild Mouse', 'Spinning'
+        ]
         for a in soup.find_all('a', href=True):
             if 'g.htm?id=' in a.get('href', ''):
                 text = a.get_text(strip=True)
-                if text in ['Sit Down', 'Inverted', 'Flying', 'Stand Up', 'Wing']:
+                if text in valid_designs:
                     return text
         return ""
     

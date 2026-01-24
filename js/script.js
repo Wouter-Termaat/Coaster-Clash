@@ -9494,8 +9494,19 @@ function generateCreditCardHTML(coasterId, options = {}) {
     const isDefunct = coaster.status !== 'Operating';
     const defunctMarker = isDefunct ? '<span class="defunct-marker">†</span>' : '';
     
-    // Get model info if available
-    const modelInfo = coaster.model ? ` - ${coaster.model}` : '';
+    // Get model info if available - FAILSAFE: hide if model matches manufacturer (full or abbreviated)
+    let modelInfo = '';
+    if (coaster.model) {
+        // Check if model is the same as manufacturer (either full name or matches abbreviated)
+        const modelLower = coaster.model.toLowerCase();
+        const manufacturerLower = coaster.manufacturer ? coaster.manufacturer.toLowerCase() : '';
+        const abbreviatedLower = manufacturerDisplayName.toLowerCase();
+        
+        // Only show model if it's different from both full and abbreviated manufacturer names
+        if (modelLower !== manufacturerLower && modelLower !== abbreviatedLower) {
+            modelInfo = ` - ${coaster.model}`;
+        }
+    }
     
     // Get image URL from Wikidata cache (sync lookup)
     const imageCoaster = {
