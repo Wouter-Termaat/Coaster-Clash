@@ -263,13 +263,39 @@ class RCDBScraper:
         return location_links[-1] if location_links else ""
     
     def _extract_status(self, soup: BeautifulSoup) -> str:
+        """
+        Extract operating status from RCDB page
+        Look for status text near park information
+        """
         text = soup.get_text()
-        if 'Removed' in text:
+        
+        # Check first 2000 characters for status (where park info is)
+        header = text[:2000]
+        
+        # Operating: Look for "Operating" followed by "since" and a date within reasonable distance
+        if 'Operating' in header and 'since' in header:
+            # Verify there's a date pattern nearby (MM/DD/YYYY or just year)
+            operating_pos = header.find('Operating')
+            since_pos = header.find('since', operating_pos)
+            if since_pos > 0 and since_pos - operating_pos < 100:
+                # Look for date pattern after "since"
+                date_section = header[since_pos:since_pos+50]
+                if re.search(r'\d+/\d+/\d+|\d{4}', date_section):
+                    return 'Operating'
+        
+        # Removed: "Operated from" with date range
+        if re.search(r'Operated.*?from.*?\d+/\d+/\d+.*?to.*?\d+/\d+/\d+', header, re.IGNORECASE | re.DOTALL):
             return 'Removed'
-        elif 'SBNO' in text:
+        
+        # SBNO
+        if 'SBNO' in header:
             return 'SBNO'
-        elif 'Under Construction' in text:
+            
+        # Under Construction - but be careful of construction notes
+        if 'Under Construction' in header:
             return 'Under Construction'
+        
+        # Default to Operating
         return "Operating"
     
     def _extract_opened(self, soup: BeautifulSoup) -> str:

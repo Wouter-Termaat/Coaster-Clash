@@ -112,8 +112,42 @@ class DatabaseMerger:
                 if rcdb_id in self.mapping:
                     custom_id = self.mapping[rcdb_id]
                     
-                    # Update existing coaster
-                    if custom_id in self.database:
+                    # Check if multiple tracks exist with this rcdbId (manual split or scraper missed split)
+                    existing_with_same_rcdb = [
+                        cid for cid, c in self.database.items() 
+                        if str(c.get('rcdbId')) == rcdb_id
+                    ]
+                    
+                    if len(existing_with_same_rcdb) > 1:
+                        # Multiple tracks exist but scraped as single
+                        # This happens when scraper doesn't detect split or coaster was manually split
+                        print(f"⚠️  RCDB {rcdb_id} has {len(existing_with_same_rcdb)} tracks but scraped as single")
+                        print(f"   Updating all tracks: {existing_with_same_rcdb}")
+                        
+                        # Update ALL tracks with this rcdbId
+                        for track_id in existing_with_same_rcdb:
+                            existing_name = self.database[track_id].get('name')
+                            self._update_coaster(track_id, coaster)
+                            
+                            # Preserve original track name (Left/Right suffix)
+                            if existing_name:
+                                self.database[track_id]['name'] = existing_name
+                            
+                            # Add/update split protection fields
+                            track_name = self._extract_track_name(existing_name)
+                            siblings = [tid for tid in existing_with_same_rcdb if tid != track_id]
+                            
+                            self.database[track_id]['isSplitTrack'] = True
+                            self.database[track_id]['splitGroup'] = rcdb_id
+                            self.database[track_id]['trackName'] = track_name
+                            self.database[track_id]['splitSiblings'] = siblings
+                            
+                            updated_count += 1
+                            updated_ids.append(track_id)
+                        
+                        preserved_splits += 1
+                    elif custom_id in self.database:
+                        # Normal single coaster update
                         self._update_coaster(custom_id, coaster)
                         updated_count += 1
                         updated_ids.append(custom_id)
