@@ -3285,6 +3285,9 @@ const DOM = {};
         // Load or initialize stats
         loadUserData();
         
+        // Load unit system preference for this user
+        loadUnitSystemPreference();
+        
         // Load achievements
         if (typeof achievementManager !== 'undefined') {
             achievementManager.load(user);
@@ -3342,11 +3345,6 @@ const DOM = {};
     }
     
     // Placeholder functions for settings and dark mode
-    function openSettings() {
-        showToast('⚙️ Settings coming soon!');
-        closeUserMenu();
-    }
-    
     function toggleDarkMode() {
         const body = document.body;
         const btn = document.getElementById('btn-darkmode');
@@ -3364,8 +3362,6 @@ const DOM = {};
             localStorage.setItem('darkMode', 'true');
             showToast('🌙 Dark mode activated');
         }
-        
-        closeUserMenu();
     }
     
     // Load dark mode preference on page load
@@ -3377,6 +3373,173 @@ const DOM = {};
         if (darkMode === 'true') {
             body.classList.add('dark-mode');
             if (btn) btn.textContent = 'Light Mode';
+        }
+    }
+
+    // ============================================
+    // UNIT CONVERSION SYSTEM
+    // ============================================
+    
+    /**
+     * Detect unit preference based on timezone (fallback to metric)
+     * US, Liberia, Myanmar use imperial; all others use metric
+     */
+    function detectUnitPreference() {
+        try {
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            // US timezones suggest imperial units
+            if (timezone && (timezone.includes('America') || timezone.includes('Pacific/Honolulu'))) {
+                return 'imperial';
+            }
+        } catch (e) {
+            // Timezone detection failed
+        }
+        // Default to metric (international standard)
+        return 'metric';
+    }
+    
+    /**
+     * Get current user's unit preference
+     * Returns 'metric' or 'imperial'
+     */
+    function getUserUnitPreference() {
+        if (!currentUser) return 'metric';
+        
+        const key = `unitSystem_${currentUser}`;
+        let preference = localStorage.getItem(key);
+        
+        // First-time: auto-detect and save
+        if (!preference) {
+            preference = detectUnitPreference();
+            localStorage.setItem(key, preference);
+        }
+        
+        return preference;
+    }
+    
+    /**
+     * Convert measurement from imperial (database format) to display format
+     * Returns object: {value: number|string, unit: string}
+     * Database stores: feet, mph (from RCDB)
+     * 
+     * @param {string|number} value - The value to convert (in imperial units)
+     * @param {string} type - Measurement type: 'height', 'length', 'speed'
+     * @returns {{value: string|number, unit: string}}
+     */
+    function convertMeasurement(value, type) {
+        // Handle null, undefined, empty, or zero values
+        if (!value || value === '-' || value === '0' || value === 0) {
+            return { value: '-', unit: '' };
+        }
+        
+        const numValue = parseFloat(value);
+        if (isNaN(numValue)) {
+            return { value: '-', unit: '' };
+        }
+        
+        const unitSystem = getUserUnitPreference();
+        
+        if (unitSystem === 'imperial') {
+            // Return imperial values as-is (database is already in imperial)
+            const rounded = Math.round(numValue);
+            switch(type) {
+                case 'speed':
+                    return { value: rounded, unit: 'mph' };
+                case 'height':
+                case 'length':
+                    return { value: rounded, unit: 'ft' };
+                default:
+                    return { value: rounded, unit: '' };
+            }
+        } else {
+            // Convert imperial to metric
+            switch(type) {
+                case 'speed':
+                    // mph to km/h: multiply by 1.60934
+                    return { value: Math.round(numValue * 1.60934), unit: 'km/h' };
+                case 'height':
+                case 'length':
+                    // feet to meters: multiply by 0.3048
+                    return { value: Math.round(numValue * 0.3048), unit: 'm' };
+                default:
+                    return { value: Math.round(numValue), unit: '' };
+            }
+        }
+    }
+    
+    /**
+     * Toggle between imperial and metric units
+     */
+    function toggleUnitSystem() {
+        if (!currentUser) {
+            showToast('⚠️ Please log in first');
+            closeUserMenu();
+            return;
+        }
+        
+        const btn = document.getElementById('btn-units');
+        const key = `unitSystem_${currentUser}`;
+        const currentSystem = getUserUnitPreference();
+        
+        if (currentSystem === 'metric') {
+            localStorage.setItem(key, 'imperial');
+            if (btn) btn.textContent = 'Units: Imperial';
+            showToast('📏 Imperial units activated');
+        } else {
+            localStorage.setItem(key, 'metric');
+            if (btn) btn.textContent = 'Units: Metric';
+            showToast('📐 Metric units activated');
+        }
+        
+        // Refresh all displays to show new units
+        refreshAllMeasurements();
+    }
+    
+    /**
+     * Load unit system preference and update button text
+     */
+    function loadUnitSystemPreference() {
+        if (!currentUser) return;
+        
+        const unitSystem = getUserUnitPreference();
+        const btn = document.getElementById('btn-units');
+        
+        if (btn) {
+            btn.textContent = unitSystem === 'metric' ? 'Units: Metric' : 'Units: Imperial';
+        }
+    }
+    
+    /**
+     * Refresh all measurement displays after unit system change
+     */
+    function refreshAllMeasurements() {
+        // Get current active tab
+        const battleTab = document.querySelector('#battle-tab');
+        const creditsTab = document.querySelector('#credits-tab');
+        const rankingTab = document.querySelector('#ranking-tab');
+        
+        // Refresh battle view if active
+        if (battleTab && battleTab.classList.contains('active')) {
+            try { displayBattle(); } catch (e) { console.error('Error refreshing battle:', e); }
+        }
+        
+        // Refresh credits grid if active
+        if (creditsTab && creditsTab.classList.contains('active')) {
+            try { populateCreditsGrid(); } catch (e) { console.error('Error refreshing credits:', e); }
+        }
+        
+        // Refresh ranking table if active
+        if (rankingTab && rankingTab.classList.contains('active')) {
+            try { displayRanking(); } catch (e) { console.error('Error refreshing ranking:', e); }
+        }
+        
+        // Refresh deck builder if open
+        const deckBuilder = document.getElementById('deckBuilderOverlay');
+        if (deckBuilder && deckBuilder.style.display === 'flex') {
+            try {
+                renderDeckSlots();
+                renderAvailableCards();
+            } catch (e) { console.error('Error refreshing deck builder:', e); }
         }
     }
 
@@ -6172,6 +6335,11 @@ const DOM = {};
     window.addEventListener('DOMContentLoaded', () => {
         // Load dark mode preference
         loadDarkModePreference();
+        
+        // Load unit system preference (after user is determined)
+        if (localStorage.getItem('lastUser')) {
+            loadUnitSystemPreference();
+        }
         
         const dismissed = localStorage.getItem('keyboardHintDismissed');
         if (dismissed === 'true') {
@@ -9484,10 +9652,10 @@ function generateCreditCardHTML(coasterId, options = {}) {
         }
     }
     
-    // Format stats
-    const displaySpeed = coaster.speed ? Math.round(parseFloat(coaster.speed)) : '-';
-    const displayHeight = coaster.height ? Math.round(parseFloat(coaster.height)) : '-';
-    const displayLength = coaster.length ? Math.round(parseFloat(coaster.length)) : '-';
+    // Format stats using conversion system (database is in imperial: feet, mph)
+    const speed = convertMeasurement(coaster.speed, 'speed');
+    const height = convertMeasurement(coaster.height, 'height');
+    const length = convertMeasurement(coaster.length, 'length');
     const displayInversions = coaster.inversions || 0;
     
     // Check if defunct
@@ -9573,15 +9741,15 @@ function generateCreditCardHTML(coasterId, options = {}) {
                 <div class="credit-card-stats">
                     <div class="credit-stat">
                         <div class="credit-stat-label">speed</div>
-                        <div class="credit-stat-value">${displaySpeed}${displaySpeed !== '-' ? 'km/h' : ''}</div>
+                        <div class="credit-stat-value">${speed.value}${speed.unit}</div>
                     </div>
                     <div class="credit-stat">
                         <div class="credit-stat-label">height</div>
-                        <div class="credit-stat-value">${displayHeight}${displayHeight !== '-' ? 'm' : ''}</div>
+                        <div class="credit-stat-value">${height.value}${height.unit}</div>
                     </div>
                     <div class="credit-stat">
                         <div class="credit-stat-label">length</div>
-                        <div class="credit-stat-value">${displayLength}${displayLength !== '-' ? 'm' : ''}</div>
+                        <div class="credit-stat-value">${length.value}${length.unit}</div>
                     </div>
                     <div class="credit-stat">
                         <div class="credit-stat-label">inversions</div>
