@@ -283,17 +283,32 @@ class RCDBScraper:
                 if re.search(r'\d+/\d+/\d+|\d{4}', date_section):
                     return 'Operating'
         
-        # Removed: "Operated from" with date range
+        # Removed: "Operated from" with date range (but not "Former status: Operated from")
         if re.search(r'Operated.*?from.*?\d+/\d+/\d+.*?to.*?\d+/\d+/\d+', header, re.IGNORECASE | re.DOTALL):
-            return 'Removed'
+            # Make sure it's not "Former status: Operated from..."
+            match = re.search(r'Operated.*?from.*?\d+/\d+/\d+.*?to.*?\d+/\d+/\d+', header, re.IGNORECASE | re.DOTALL)
+            if match:
+                # Check if "Former" appears within 20 characters before the match
+                match_pos = header.find(match.group())
+                prefix = header[max(0, match_pos-20):match_pos]
+                if 'Former' not in prefix:
+                    return 'Removed'
         
-        # SBNO
+        # SBNO (but not "Former status: SBNO")
         if 'SBNO' in header:
-            return 'SBNO'
+            # Check if "Former" appears within 20 characters before "SBNO"
+            sbno_pos = header.find('SBNO')
+            prefix = header[max(0, sbno_pos-20):sbno_pos]
+            if 'Former' not in prefix:
+                return 'SBNO'
             
-        # Under Construction - but be careful of construction notes
+        # Under Construction - but be careful of construction notes and Former status
         if 'Under Construction' in header:
-            return 'Under Construction'
+            # Check if "Former" appears within 20 characters before "Under Construction"
+            uc_pos = header.find('Under Construction')
+            prefix = header[max(0, uc_pos-20):uc_pos]
+            if 'Former' not in prefix:
+                return 'Under Construction'
         
         # Default to Operating
         return "Operating"
